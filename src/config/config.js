@@ -19,6 +19,12 @@ const REQUIRED_VARS = [
   "REDIS_PASSWORD",
 ];
 
+const isProduction = process.env.NODE_ENV === "production";
+
+if (isProduction) {
+  REQUIRED_VARS.push("COOKIE_DOMAIN", "FRONTEND_URL", "FRONTEND_URLS");
+}
+
 const missing = REQUIRED_VARS.filter((key) => !process.env[key]);
 
 if (missing.length > 0) {
@@ -41,8 +47,9 @@ const _config = {
   REDIS_PASSWORD:        process.env.REDIS_PASSWORD,
   REDIS_DB:              process.env.REDIS_DB,
   REDIS_TLS:             process.env.REDIS_TLS,
-  COOKIE_DOMAIN:         process.env.COOKIE_DOMAIN || "localhost",
-  FRONTEND_URLS:         (process.env.FRONTEND_URLS || "http://localhost:5173")
+  COOKIE_DOMAIN:         process.env.COOKIE_DOMAIN,
+  FRONTEND_URL:          process.env.FRONTEND_URL,
+  FRONTEND_URLS:         (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || "")
     .split(",")
     .map((url) => url.trim())
     .filter(Boolean),

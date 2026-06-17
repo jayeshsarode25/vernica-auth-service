@@ -32,17 +32,22 @@ const findUserByPhone = (formattedPhone, selectFields = "") => {
   return selectFields ? query.select(selectFields) : query;
 };
 
-const authCookieOptions = (options = {}) => ({
+const authCookieOptions = () => ({
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  domain: config.COOKIE_DOMAIN, 
+  secure: true,
+  sameSite: "none",
+  domain: config.COOKIE_DOMAIN,
+  path: "/",
+});
+
+const persistentAuthCookieOptions = (options = {}) => ({
+  ...authCookieOptions(),
   maxAge: 7 * 24 * 60 * 60 * 1000,
   ...options,
 });
 
 const issueAuthCookie = (res, token, options = {}) => {
-  res.cookie("token", token, authCookieOptions(options));
+  res.cookie("token", token, persistentAuthCookieOptions(options));
 };
 
 export const signUpWithPhone = catchAsync(async (req, res) => {
@@ -313,9 +318,9 @@ export const googleOAuthCallback = catchAsync(async (req, res) => {
     { expiresIn: "2d" },
   );
 
-  res.cookie("token", token, authCookieOptions());
+  issueAuthCookie(res, token);
 
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+  const frontendUrl = config.FRONTEND_URL;
   const redirectStatus = isNewUser ? "registered" : "logged-in";
 
   res.redirect(`${frontendUrl}/auth/google/callback?status=${redirectStatus}`);
@@ -340,12 +345,7 @@ export const getMe = catchAsync(async (req, res) => {
 });
 
 export const logout = catchAsync(async (req, res) => {
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-    domain: config.COOKIE_DOMAIN,
-  });
+  res.clearCookie("token", authCookieOptions());
 
   res.status(200).json({ message: "Logged out successfully" });
 });
