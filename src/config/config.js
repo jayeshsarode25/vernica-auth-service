@@ -41,6 +41,11 @@ const _config = {
   REDIS_PASSWORD:        process.env.REDIS_PASSWORD,
   REDIS_DB:              process.env.REDIS_DB,
   REDIS_TLS:             process.env.REDIS_TLS,
+  COOKIE_DOMAIN:         process.env.COOKIE_DOMAIN || "localhost",
+  FRONTEND_URLS:         (process.env.FRONTEND_URLS || "http://localhost:5173")
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean),
 };
 
 export default _config;

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { sendOtp, verifyOtp } from "../services/otp.service.js";
 import { AppError, catchAsync } from "../utils/error.utils.js";
+import config from "../config/config.js";
 
 const normalizeIndianPhone = (phone) => {
   if (phone === undefined || phone === null) {
@@ -35,6 +36,7 @@ const authCookieOptions = (options = {}) => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  domain: config.COOKIE_DOMAIN,
   maxAge: 7 * 24 * 60 * 60 * 1000,
   ...options,
 });
@@ -222,7 +224,7 @@ export const loginVerifyOtp = catchAsync(async (req, res) => {
     { expiresIn: "7d" },
   );
 
-  issueAuthCookie(res, token, { sameSite: "lax" });
+  issueAuthCookie(res, token);
 
   res.status(200).json({
     message: "Login successful",
@@ -342,6 +344,7 @@ export const logout = catchAsync(async (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    domain: config.COOKIE_DOMAIN,
   });
 
   res.status(200).json({ message: "Logged out successfully" });
