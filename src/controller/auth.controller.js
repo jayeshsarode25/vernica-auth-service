@@ -32,13 +32,62 @@ const findUserByPhone = (formattedPhone, selectFields = "") => {
   return selectFields ? query.select(selectFields) : query;
 };
 
-const authCookieOptions = () => ({
-  httpOnly: true,
-  secure: true,
-  sameSite: "none",
-  domain: config.COOKIE_DOMAIN,
-  path: "/",
-});
+// ✅ FIX: isProduction is now computed INSIDE the function (per request),
+// not once at module-import time. Previously this was a top-level const,
+// which meant its value was locked in based on whatever process.env.NODE_ENV
+// was at the moment this file was first imported — before dotenv may have
+// even loaded it. That could silently force "production" cookie settings
+// (Secure + SameSite=None + Domain) on localhost, breaking auth in dev
+// regardless of what your .env said, until a very specific restart/import
+// order happened to line up correctly.
+const authCookieOptions = () => {
+  const isProduction = process.env.NODE_ENV === "production";
+
+  const options = {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    path: "/",
+  };
+
+  if (isProduction && config.COOKIE_DOMAIN) {
+    options.domain = config.COOKIE_DOMAIN;
+  }
+
+  return options;
+};
+
+const legacyAuthCookieClearOptions = () => {
+  const current = authCookieOptions();
+  const variants = [
+    current,
+    { httpOnly: true, secure: true, sameSite: "none", path: "/" },
+    { httpOnly: true, secure: false, sameSite: "lax", path: "/" },
+  ];
+
+  if (config.COOKIE_DOMAIN) {
+    variants.push({
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      domain: config.COOKIE_DOMAIN,
+      path: "/",
+    });
+    variants.push({
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      domain: config.COOKIE_DOMAIN,
+      path: "/",
+    });
+  }
+
+  return variants.filter(
+    (variant, index, all) =>
+      index ===
+      all.findIndex((item) => JSON.stringify(item) === JSON.stringify(variant)),
+  );
+};
 
 const persistentAuthCookieOptions = (options = {}) => ({
   ...authCookieOptions(),
@@ -47,7 +96,16 @@ const persistentAuthCookieOptions = (options = {}) => ({
 });
 
 const issueAuthCookie = (res, token, options = {}) => {
-  res.cookie("token", token, persistentAuthCookieOptions(options));
+  const cookieOptions = persistentAuthCookieOptions(options);
+
+  console.info("[auth] creating login cookie", {
+    cookieName: "token",
+    tokenPresent: Boolean(token),
+    tokenLength: token?.length ?? 0,
+    options: cookieOptions,
+  });
+
+  res.cookie("token", token, cookieOptions);
 };
 
 export const signUpWithPhone = catchAsync(async (req, res) => {
@@ -153,8 +211,6 @@ export const signUpWithEmail = catchAsync(async (req, res) => {
     process.env.JWT_SECRET,
     { expiresIn: "7d" },
   );
-
-
 
   issueAuthCookie(res, token);
 
@@ -311,7 +367,6 @@ export const googleOAuthCallback = catchAsync(async (req, res) => {
     });
   }
 
-
   const token = jwt.sign(
     { userId: user._id, email: user.email, role: user.role },
     process.env.JWT_SECRET,
@@ -335,6 +390,11 @@ export const resetPassword = catchAsync(async () => {
 });
 
 export const getMe = catchAsync(async (req, res) => {
+  console.info("[auth] /me resolved authenticated user", {
+    userId: req.user?.id,
+    role: req.user?.role,
+  });
+
   const user = await userModel.findById(req.user.id).select("-password");
 
   if (!user) {
@@ -345,7 +405,22 @@ export const getMe = catchAsync(async (req, res) => {
 });
 
 export const logout = catchAsync(async (req, res) => {
-  res.clearCookie("token", authCookieOptions());
+  const cookieOptions = authCookieOptions();
+  const clearVariants = legacyAuthCookieClearOptions();
+
+  console.info("[auth] logout requested", {
+    cookieNames: Object.keys(req.cookies || {}),
+    hasTokenCookie: Boolean(req.cookies?.token),
+  });
+  console.info("[auth] clearing login cookie", {
+    cookieName: "token",
+    options: cookieOptions,
+    fallbackVariantCount: clearVariants.length,
+  });
+
+  clearVariants.forEach((options) => {
+    res.clearCookie("token", options);
+  });
 
   res.status(200).json({ message: "Logged out successfully" });
 });

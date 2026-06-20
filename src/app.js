@@ -14,16 +14,35 @@ const app = express();
 app.set("trust proxy", 1);
 
 // Configure CORS with production domains
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://varnikaorganics.com",
+  "https://www.varnikaorganics.com",
+  ...(config.FRONTEND_URLS || []),
+];
+
 const corsOptions = {
-  origin: config.FRONTEND_URLS,
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked: ${origin}`));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   optionsSuccessStatus: 200,
 };
 
-// Apply CORS middleware BEFORE routes
 app.use(cors(corsOptions));
+
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 // Apply body parsing middleware AFTER cors but BEFORE routes
 app.use(express.json());

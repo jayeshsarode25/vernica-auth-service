@@ -3,10 +3,22 @@ import config from "../config/config.js";
 
 export function createAuthMiddleware(role = ["user"]) {
   return async function authMiddleware(req, res, next) {
+    console.info("[auth] protected route incoming cookies", {
+      method: req.method,
+      path: req.originalUrl,
+      cookieNames: Object.keys(req.cookies || {}),
+      hasTokenCookie: Boolean(req.cookies?.token),
+      hasAuthorizationHeader: Boolean(req.headers?.authorization),
+    });
+
     const token =
       req.cookies?.token || req.headers?.authorization?.split(" ")[1];
 
     if (!token) {
+      console.info("[auth] protected route rejected: no token", {
+        path: req.originalUrl,
+      });
+
       return res.status(401).json({
         message: "Unauthorized: No token provided",
       });
@@ -16,6 +28,13 @@ export function createAuthMiddleware(role = ["user"]) {
       const decoded = jwt.verify(token, config.JWT_SECRET);
 
       if (!role.includes(decoded.role)) {
+        console.info("[auth] protected route rejected: insufficient role", {
+          path: req.originalUrl,
+          userId: decoded.userId,
+          role: decoded.role,
+          allowedRoles: role,
+        });
+
         return res.status(403).json({
           message: "Forbidden: Insufficient permissions",
         });
@@ -23,8 +42,18 @@ export function createAuthMiddleware(role = ["user"]) {
 
       req.user = decoded;
       req.user.id = decoded.userId;
+      console.info("[auth] protected route authenticated", {
+        path: req.originalUrl,
+        userId: req.user.id,
+        role: req.user.role,
+      });
       next();
     } catch (err) {
+      console.info("[auth] protected route rejected: invalid token", {
+        path: req.originalUrl,
+        error: err.message,
+      });
+
       return res.status(401).json({
         message: "Unauthorized: Invalid token",
       });
