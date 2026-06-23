@@ -26,12 +26,18 @@ export function createAuthMiddleware(role = ["user"]) {
 
     try {
       const decoded = jwt.verify(token, config.JWT_SECRET);
+      const userId = decoded.userId ?? decoded.id ?? decoded._id;
+      const auth = {
+        userId,
+        role: decoded.role,
+        authenticated: true,
+      };
 
-      if (!role.includes(decoded.role)) {
+      if (!role.includes(auth.role)) {
         console.info("[auth] protected route rejected: insufficient role", {
           path: req.originalUrl,
-          userId: decoded.userId,
-          role: decoded.role,
+          userId: auth.userId,
+          role: auth.role,
           allowedRoles: role,
         });
 
@@ -40,12 +46,13 @@ export function createAuthMiddleware(role = ["user"]) {
         });
       }
 
-      req.user = decoded;
-      req.user.id = decoded.userId;
+      req.auth = auth;
+      req.user = { ...decoded, userId: auth.userId, id: auth.userId, role: auth.role };
       console.info("[auth] protected route authenticated", {
         path: req.originalUrl,
-        userId: req.user.id,
-        role: req.user.role,
+        userId: req.auth.userId,
+        role: req.auth.role,
+        authenticated: req.auth.authenticated,
       });
       next();
     } catch (err) {
