@@ -13,12 +13,9 @@ import { applySecurityMiddleware } from './middleware/Security.middleware.js'
 const app = express();
 app.set("trust proxy", 1);
 
-// Configure CORS with production domains
-const allowedOrigins = [
-  "http://localhost:5173",
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [
   "https://varnikaorganics.com",
-  "https://www.varnikaorganics.com",
-  ...(config.FRONTEND_URLS || []),
+  "http://localhost:5173",
 ];
 
 const corsOptions = {
@@ -26,7 +23,7 @@ const corsOptions = {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error(`CORS blocked: ${origin}`));
+      callback(new Error("CORS blocked origin: " + origin));
     }
   },
   credentials: true,

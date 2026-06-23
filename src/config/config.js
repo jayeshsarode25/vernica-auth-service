@@ -22,7 +22,7 @@ const REQUIRED_VARS = [
 const isProduction = process.env.NODE_ENV === "production";
 
 if (isProduction) {
-  REQUIRED_VARS.push("COOKIE_DOMAIN", "FRONTEND_URL", "FRONTEND_URLS");
+  REQUIRED_VARS.push("COOKIE_DOMAIN", "ALLOWED_ORIGINS");
 }
 
 const missing = REQUIRED_VARS.filter((key) => !process.env[key]);
@@ -49,6 +49,10 @@ const _config = {
   REDIS_TLS:             process.env.REDIS_TLS,
   COOKIE_DOMAIN:         process.env.COOKIE_DOMAIN,
   FRONTEND_URL:          process.env.FRONTEND_URL,
+  ALLOWED_ORIGINS:       (process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((url) => url.trim())
+    .filter(Boolean),
   FRONTEND_URLS:         (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || "")
     .split(",")
     .map((url) => url.trim())
