@@ -40,26 +40,60 @@ const findUserByPhone = (formattedPhone, selectFields = "") => {
 // (Secure + SameSite=None + Domain) on localhost, breaking auth in dev
 // regardless of what your .env said, until a very specific restart/import
 // order happened to line up correctly.
-const authCookieOptions = () => {
+const getRequestHostname = (req) => {
+  const host = req?.hostname || req?.get?.("host") || "";
+  return host.split(":")[0].toLowerCase();
+};
+
+const isLocalHostname = (hostname) =>
+  hostname === "localhost" ||
+  hostname === "127.0.0.1" ||
+  hostname === "::1";
+
+const isHttpsRequest = (req) => {
+  const forwardedProto = req?.get?.("x-forwarded-proto") || "";
+  const origin = req?.get?.("origin") || "";
+  return Boolean(
+    req?.secure ||
+      origin.startsWith("https://") ||
+      forwardedProto
+        .split(",")
+        .map((value) => value.trim())
+        .includes("https"),
+  );
+};
+
+const canUseConfiguredCookieDomain = (hostname) => {
+  if (!config.COOKIE_DOMAIN || !hostname) return false;
+
+  const cookieDomain = config.COOKIE_DOMAIN.replace(/^\./, "").toLowerCase();
+  return hostname === cookieDomain || hostname.endsWith(`.${cookieDomain}`);
+};
+
+const authCookieOptions = (req) => {
   const isProduction = process.env.NODE_ENV === "production";
-  const hasCookieDomain = Boolean(config.COOKIE_DOMAIN);
+  const hostname = getRequestHostname(req);
+  const shouldUseCrossSiteCookie =
+    !isLocalHostname(hostname) && (isProduction || isHttpsRequest(req));
+  const shouldUseConfiguredDomain =
+    shouldUseCrossSiteCookie && canUseConfiguredCookieDomain(hostname);
 
   const options = {
     httpOnly: true,
-    secure: isProduction || hasCookieDomain,
-    sameSite: isProduction || hasCookieDomain ? "none" : "lax",
+    secure: isProduction || shouldUseCrossSiteCookie,
+    sameSite: isProduction || shouldUseCrossSiteCookie ? "none" : "lax",
     path: "/",
   };
 
-  if (hasCookieDomain) {
+  if (shouldUseConfiguredDomain) {
     options.domain = config.COOKIE_DOMAIN;
   }
 
   return options;
 };
 
-const legacyAuthCookieClearOptions = () => {
-  const current = authCookieOptions();
+const legacyAuthCookieClearOptions = (req) => {
+  const current = authCookieOptions(req);
   const variants = [
     current,
     { httpOnly: true, secure: true, sameSite: "none", path: "/" },
@@ -90,19 +124,23 @@ const legacyAuthCookieClearOptions = () => {
   );
 };
 
-const persistentAuthCookieOptions = (options = {}) => ({
-  ...authCookieOptions(),
+const persistentAuthCookieOptions = (req, options = {}) => ({
+  ...authCookieOptions(req),
   maxAge: 7 * 24 * 60 * 60 * 1000,
   ...options,
 });
 
-const issueAuthCookie = (res, token, options = {}) => {
-  const cookieOptions = persistentAuthCookieOptions(options);
+const issueAuthCookie = (req, res, token, options = {}) => {
+  const cookieOptions = persistentAuthCookieOptions(req, options);
 
   console.info("[auth] creating login cookie", {
     cookieName: "token",
     tokenPresent: Boolean(token),
     tokenLength: token?.length ?? 0,
+    requestOrigin: req.get("origin"),
+    requestHost: req.get("host"),
+    requestProtocol: req.protocol,
+    forwardedProtocol: req.get("x-forwarded-proto"),
     options: cookieOptions,
   });
 
@@ -172,7 +210,7 @@ export const signUpVerifyOtp = catchAsync(async (req, res) => {
     { expiresIn: "7d" },
   );
 
-  issueAuthCookie(res, token);
+  issueAuthCookie(req, res, token);
 
   res.status(200).json({
     message: "User verified and registered successfully",
@@ -213,7 +251,7 @@ export const signUpWithEmail = catchAsync(async (req, res) => {
     { expiresIn: "7d" },
   );
 
-  issueAuthCookie(res, token);
+  issueAuthCookie(req, res, token);
 
   res.status(201).json({
     message: "User signed up successfully",
@@ -286,7 +324,7 @@ export const loginVerifyOtp = catchAsync(async (req, res) => {
     { expiresIn: "7d" },
   );
 
-  issueAuthCookie(res, token);
+  issueAuthCookie(req, res, token);
 
   res.status(200).json({
     message: "Login successful",
@@ -374,7 +412,7 @@ export const googleOAuthCallback = catchAsync(async (req, res) => {
     { expiresIn: "2d" },
   );
 
-  issueAuthCookie(res, token);
+  issueAuthCookie(req, res, token);
 
   const frontendUrl = config.FRONTEND_URL;
   const redirectStatus = isNewUser ? "registered" : "logged-in";
@@ -406,8 +444,8 @@ export const getMe = catchAsync(async (req, res) => {
 });
 
 export const logout = catchAsync(async (req, res) => {
-  const cookieOptions = authCookieOptions();
-  const clearVariants = legacyAuthCookieClearOptions();
+  const cookieOptions = authCookieOptions(req);
+  const clearVariants = legacyAuthCookieClearOptions(req);
 
   console.info("[auth] logout requested", {
     cookieNames: Object.keys(req.cookies || {}),
