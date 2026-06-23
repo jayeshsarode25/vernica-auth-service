@@ -42,15 +42,16 @@ const findUserByPhone = (formattedPhone, selectFields = "") => {
 // order happened to line up correctly.
 const authCookieOptions = () => {
   const isProduction = process.env.NODE_ENV === "production";
+  const hasCookieDomain = Boolean(config.COOKIE_DOMAIN);
 
   const options = {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
+    secure: isProduction || hasCookieDomain,
+    sameSite: isProduction || hasCookieDomain ? "none" : "lax",
     path: "/",
   };
 
-  if (isProduction && config.COOKIE_DOMAIN) {
+  if (hasCookieDomain) {
     options.domain = config.COOKIE_DOMAIN;
   }
 

@@ -13,6 +13,31 @@ import { applySecurityMiddleware } from './middleware/Security.middleware.js'
 const app = express();
 app.set("trust proxy", 1);
 
+const buildCookieVariants = () => {
+  const variants = [];
+
+  if (config.COOKIE_DOMAIN) {
+    variants.push({
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      domain: config.COOKIE_DOMAIN,
+      path: "/",
+    });
+    variants.push({
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      domain: config.COOKIE_DOMAIN,
+      path: "/",
+    });
+  }
+
+  return variants;
+};
+
+app.locals.cookieVariants = buildCookieVariants();
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [
   "https://varnikaorganics.com",
   "http://localhost:5173",

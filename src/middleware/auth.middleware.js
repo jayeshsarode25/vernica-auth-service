@@ -11,8 +11,9 @@ export function createAuthMiddleware(role = ["user"]) {
       hasAuthorizationHeader: Boolean(req.headers?.authorization),
     });
 
+    const cookieToken = req.cookies?.token;
     const token =
-      req.cookies?.token || req.headers?.authorization?.split(" ")[1];
+      cookieToken || req.headers?.authorization?.split(" ")[1];
 
     if (!token) {
       console.info("[auth] protected route rejected: no token", {
@@ -25,12 +26,13 @@ export function createAuthMiddleware(role = ["user"]) {
     }
 
     try {
-      const decoded = jwt.verify(token, config.JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const userId = decoded.userId ?? decoded.id ?? decoded._id;
       const auth = {
+        hasTokenCookie: Boolean(cookieToken),
         userId,
         role: decoded.role,
-        authenticated: true,
+        authenticated: Boolean(decoded),
       };
 
       if (!role.includes(auth.role)) {
