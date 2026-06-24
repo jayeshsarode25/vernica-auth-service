@@ -107,8 +107,12 @@ app.get('/', (req, res) => {
 
 
 import authRoutes from './routes/user.route.js'
+import contactRoutes from './routes/contact.route.js'
+import adminContactRoutes from './routes/adminContact.route.js'
 import { globalErrorHandler } from './utils/error.utils.js';
 app.use('/api/auth', authRoutes)
+app.use('/api/contact', contactRoutes)
+app.use('/api/admin/contact', adminContactRoutes)
 
 app.use(globalErrorHandler);
 
